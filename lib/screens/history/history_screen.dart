@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../models/match.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/storage_service.dart';
 
 final _dateFmt = DateFormat('MMM d, yyyy  HH:mm');
 
@@ -20,22 +22,90 @@ class HistoryScreen extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         leading: BackButton(onPressed: () => context.go('/')),
       ),
-      body: historyAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (matches) => matches.isEmpty
-            ? const Center(
-                child: Text('No completed matches yet.',
-                    style: TextStyle(color: Colors.white54)))
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: matches.length,
-                itemBuilder: (ctx, i) => _MatchCard(match: matches[i]),
-              ),
+      body: Column(
+        children: [
+          _DataLocationBanner(),
+          Expanded(
+            child: historyAsync.when(
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
+              data: (matches) => matches.isEmpty
+                  ? const Center(
+                      child: Text('No completed matches yet.',
+                          style: TextStyle(color: Colors.white54)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: matches.length,
+                      itemBuilder: (ctx, i) =>
+                          _MatchCard(match: matches[i]),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+
+/// Shows where data files are stored. Only visible on desktop builds.
+class _DataLocationBanner extends StatefulWidget {
+  @override
+  State<_DataLocationBanner> createState() => _DataLocationBannerState();
+}
+
+class _DataLocationBannerState extends State<_DataLocationBanner> {
+  String? _path;
+
+  @override
+  void initState() {
+    super.initState();
+    StorageService.getInstance().then((s) {
+      if (mounted) setState(() => _path = s.dataLocation);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_path == null || _path == 'Browser localStorage') {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      color: const Color(0xFF1E1E1E),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.folder_open, size: 14, color: Colors.white38),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Data stored at: $_path',
+              style: const TextStyle(fontSize: 11, color: Colors.white38),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy path',
+            icon: const Icon(Icons.copy, size: 14, color: Colors.white38),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: _path!));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Path copied to clipboard'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 class _MatchCard extends StatelessWidget {
   const _MatchCard({required this.match});
