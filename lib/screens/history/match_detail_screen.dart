@@ -126,9 +126,9 @@ class _TurnRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor = turn.isBust
-        ? Colors.red.withOpacity(0.08)
+        ? Colors.orange.withOpacity(0.08)
         : turn.isCheckout
-            ? Colors.green.withOpacity(0.1)
+            ? Colors.red.withOpacity(0.1)
             : null;
 
     String dartsText = '';
@@ -156,9 +156,9 @@ class _TurnRow extends StatelessWidget {
                   '${turn.isBust ? "  BUST" : turn.isCheckout ? "  ✓" : ""}',
                   style: TextStyle(
                       color: turn.isBust
-                          ? Colors.redAccent
+                          ? Colors.orangeAccent
                           : turn.isCheckout
-                              ? Colors.greenAccent
+                              ? Colors.redAccent
                               : Colors.white70,
                       fontSize: 13),
                 ),
@@ -174,7 +174,7 @@ class _TurnRow extends StatelessWidget {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: turn.isBust ? Colors.redAccent : Colors.white,
+              color: turn.isBust ? Colors.orangeAccent : Colors.white,
             ),
           ),
         ],

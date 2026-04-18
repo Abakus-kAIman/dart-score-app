@@ -20,7 +20,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
     ref.read(dartInputProvider.notifier).addDart(
           DartThrow(multiplier: _multiplier, value: value),
         );
-    setState(() => _multiplier = 1); // reset to single after each dart
+    setState(() => _multiplier = 1);
   }
 
   void _addMiss() {
@@ -36,14 +36,15 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
     final notifier = ref.read(dartInputProvider.notifier);
     final isFull = notifier.isFull;
     final subtotal = notifier.subtotal;
+    final accent = Theme.of(context).colorScheme.primary;
 
     return Container(
       color: const Color(0xFF1A1A1A),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Dart display row
+          // Dart slots + subtotal
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -53,16 +54,18 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                   child: _DartChip(
                     dart: i < darts.length ? darts[i] : null,
                     index: i,
+                    accent: accent,
                   ),
                 ),
+              const SizedBox(width: 16),
+              Text(
+                'Total: $subtotal',
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            'Subtotal: $subtotal',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
           // Multiplier toggle
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -73,14 +76,16 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                 isSelected: [
                   _multiplier == 1,
                   _multiplier == 2,
-                  _multiplier == 3
+                  _multiplier == 3,
                 ],
                 onPressed: isFull
                     ? null
                     : (i) => setState(() => _multiplier = i + 1),
                 borderRadius: BorderRadius.circular(8),
+                selectedColor: Colors.white,
+                fillColor: accent,
                 constraints:
-                    const BoxConstraints(minWidth: 52, minHeight: 36),
+                    const BoxConstraints(minWidth: 48, minHeight: 34),
                 children: const [
                   Text('S', style: TextStyle(fontWeight: FontWeight.bold)),
                   Text('D', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -89,43 +94,42 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Number grid
-          SizedBox(
-            height: 160,
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                mainAxisSpacing: 4,
-                crossAxisSpacing: 4,
-                childAspectRatio: 1.3,
-              ),
-              itemCount: 21, // 1-20 + bull
-              itemBuilder: (ctx, i) {
-                final value = i == 20 ? 25 : i + 1;
-                final label = value == 25 ? 'Bull' : '$value';
-                // Triple not valid for bull
-                final disabled = isFull ||
-                    (value == 25 && _multiplier == 3) ||
-                    (_multiplier == 2 && value == 25 && false); // double bull OK
-                return _GridBtn(
-                  label: label,
-                  onTap: disabled ? null : () => _addDart(value),
-                );
-              },
+          const SizedBox(height: 8),
+          // Number grid — shrinkWrap so it shows all 3 rows naturally
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+              mainAxisExtent: 42,
             ),
+            itemCount: 21, // 1–20 + bull
+            itemBuilder: (ctx, i) {
+              final value = i == 20 ? 25 : i + 1;
+              final label = value == 25 ? 'Bull' : '$value';
+              final disabled = isFull || (value == 25 && _multiplier == 3);
+              return _GridBtn(
+                label: label,
+                onTap: disabled ? null : () => _addDart(value),
+                accent: accent,
+              );
+            },
           ),
           const SizedBox(height: 8),
+          // Action row
           Row(
             children: [
               ElevatedButton.icon(
                 onPressed: isFull ? null : _addMiss,
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.close, size: 16),
                 label: const Text('Miss'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[800],
                   foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
               const Spacer(),
@@ -135,8 +139,8 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                     ref.read(dartInputProvider.notifier).removeLast();
                     setState(() => _multiplier = 1);
                   },
-                  icon: const Icon(Icons.backspace_outlined),
-                  label: const Text('Undo Dart'),
+                  icon: const Icon(Icons.backspace_outlined, size: 16),
+                  label: const Text('Undo'),
                 ),
               const SizedBox(width: 8),
               ElevatedButton(
@@ -153,29 +157,33 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
 }
 
 class _DartChip extends StatelessWidget {
-  const _DartChip({required this.dart, required this.index});
+  const _DartChip({
+    required this.dart,
+    required this.index,
+    required this.accent,
+  });
 
   final DartThrow? dart;
   final int index;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
+    final filled = dart != null;
     return Container(
       width: 80,
-      height: 36,
+      height: 34,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: dart != null ? const Color(0xFF2E7D32) : const Color(0xFF2A2A2A),
+        color: filled ? accent.withOpacity(0.25) : const Color(0xFF2A2A2A),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: dart != null ? Colors.green : Colors.white24,
-        ),
+        border: Border.all(color: filled ? accent : Colors.white24),
       ),
       child: Text(
         dart?.toString() ?? 'Dart ${index + 1}',
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          color: dart != null ? Colors.white : Colors.white38,
+          color: filled ? Colors.white : Colors.white38,
           fontSize: 13,
         ),
       ),
@@ -184,10 +192,15 @@ class _DartChip extends StatelessWidget {
 }
 
 class _GridBtn extends StatelessWidget {
-  const _GridBtn({required this.label, required this.onTap});
+  const _GridBtn({
+    required this.label,
+    required this.onTap,
+    required this.accent,
+  });
 
   final String label;
   final VoidCallback? onTap;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +210,7 @@ class _GridBtn extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
+        splashColor: accent.withOpacity(0.3),
         child: Center(
           child: Text(
             label,

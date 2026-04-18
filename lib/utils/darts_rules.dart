@@ -70,7 +70,10 @@ class DartsRules {
 
   static bool isValidTotalScore(int score) => score >= 0 && score <= 180;
 
-  static const List<int> commonScores = [26, 41, 45, 60, 81, 100, 140, 180];
+  static const List<int> commonScores = [
+    0, 1, 3, 5, 11, 20, 21, 22, 25, 26,
+    41, 45, 57, 60, 80, 81, 85, 100, 121, 140, 180,
+  ];
 
   static bool couldBeCheckout(int remaining, bool doubleOut) {
     if (remaining <= 0) return false;

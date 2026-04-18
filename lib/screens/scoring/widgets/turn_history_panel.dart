@@ -52,8 +52,8 @@ class _TurnTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Color? bgColor;
-    if (turn.isBust) bgColor = Colors.red.withOpacity(0.1);
-    if (turn.isCheckout) bgColor = Colors.green.withOpacity(0.15);
+    if (turn.isBust) bgColor = Colors.orange.withOpacity(0.1);
+    if (turn.isCheckout) bgColor = Colors.red.withOpacity(0.15);
 
     String subtitle;
     if (turn.isBust) {
@@ -97,9 +97,9 @@ class _TurnTile extends StatelessWidget {
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: turn.isBust
-                  ? Colors.redAccent
+                  ? Colors.orangeAccent
                   : turn.isCheckout
-                      ? Colors.greenAccent
+                      ? Colors.redAccent
                       : Colors.white,
             ),
           ),

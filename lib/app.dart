@@ -17,7 +17,7 @@ class DartScoreApp extends ConsumerWidget {
   }
 
   ThemeData _buildTheme() {
-    const seedColor = Color(0xFF00C853); // dart green
+    const seedColor = Color(0xFFE53935);
     return ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: seedColor,
