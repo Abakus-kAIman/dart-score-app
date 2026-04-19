@@ -5,6 +5,7 @@ import '../../models/match.dart';
 import '../../models/turn.dart';
 import '../../providers/game_provider.dart';
 import '../../utils/checkout_table.dart';
+import '../../utils/storage_service.dart';
 import 'widgets/score_input_total.dart';
 import 'widgets/score_input_dart_by_dart.dart';
 import 'widgets/turn_history_panel.dart';
@@ -19,6 +20,28 @@ class ScoringScreen extends ConsumerStatefulWidget {
 class _ScoringScreenState extends ConsumerState<ScoringScreen> {
   TurnMode _inputMode = TurnMode.total;
   bool _historyVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    StorageService.getInstance().then((s) async {
+      final mode = await s.loadInputMode();
+      if (mode != null && mounted) {
+        setState(() {
+          _inputMode =
+              mode == 'dartByDart' ? TurnMode.dartByDart : TurnMode.total;
+        });
+      }
+    });
+  }
+
+  void _setInputMode(TurnMode mode) {
+    setState(() => _inputMode = mode);
+    ref.read(dartInputProvider.notifier).clear();
+    StorageService.getInstance().then(
+      (s) => s.saveInputMode(mode == TurnMode.dartByDart ? 'dartByDart' : 'total'),
+    );
+  }
 
   Future<void> _submitTotal(int score) async {
     final match = ref.read(gameProvider)!;
@@ -313,15 +336,15 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
         ),
         _InputModeToggle(
           mode: _inputMode,
-          onChanged: (m) {
-            setState(() => _inputMode = m);
-            ref.read(dartInputProvider.notifier).clear();
-          },
+          onChanged: _setInputMode,
         ),
         if (_inputMode == TurnMode.total)
           ScoreInputTotal(onSubmit: _submitTotal)
         else
-          ScoreInputDartByDart(onConfirm: _submitDartByDart),
+          ScoreInputDartByDart(
+            onConfirm: _submitDartByDart,
+            playerRemaining: notifier.remainingForPlayer(currentId),
+          ),
         const SizedBox(height: 8),
       ],
     );

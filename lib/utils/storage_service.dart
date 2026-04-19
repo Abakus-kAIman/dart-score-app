@@ -6,6 +6,7 @@ class StorageService {
   static const _matchesKey = 'completed_matches';
   static const _activeMatchKey = 'active_match';
   static const _lastSettingsKey = 'last_settings';
+  static const _inputModeKey = 'input_mode';
 
   static StorageService? _instance;
   late SharedPreferences _prefs;
@@ -83,5 +84,13 @@ class StorageService {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<void> saveInputMode(String mode) async {
+    await _prefs.setString(_inputModeKey, mode);
+  }
+
+  Future<String?> loadInputMode() async {
+    return _prefs.getString(_inputModeKey);
   }
 }

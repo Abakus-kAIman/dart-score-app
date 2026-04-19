@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/dart_throw.dart';
 import '../../../providers/game_provider.dart';
+import '../../../utils/checkout_table.dart';
 
 class ScoreInputDartByDart extends ConsumerStatefulWidget {
-  const ScoreInputDartByDart({super.key, required this.onConfirm});
+  const ScoreInputDartByDart({
+    super.key,
+    required this.onConfirm,
+    required this.playerRemaining,
+  });
 
   final Future<void> Function() onConfirm;
+  final int playerRemaining;
 
   @override
   ConsumerState<ScoreInputDartByDart> createState() =>
@@ -38,13 +44,20 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
     final subtotal = notifier.subtotal;
     final accent = Theme.of(context).colorScheme.primary;
 
+    final projected = widget.playerRemaining - subtotal;
+    final dartsLeft = 3 - darts.length;
+    final liveCheckout = (subtotal > 0 && projected >= 2 && projected <= 170)
+        ? CheckoutTable.suggestForDartsLeft(projected, dartsLeft)
+        : null;
+    final showLive = subtotal > 0;
+
     return Container(
       color: const Color(0xFF1A1A1A),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Dart slots + subtotal
+          // Dart slots
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -57,15 +70,23 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                     accent: accent,
                   ),
                 ),
-              const SizedBox(width: 16),
-              Text(
-                'Total: $subtotal',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold),
-              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          // Live score row
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: showLive
+                ? _LiveScoreBar(
+                    key: ValueKey(projected),
+                    subtotal: subtotal,
+                    projected: projected,
+                    checkoutRoute: liveCheckout,
+                    accent: accent,
+                  )
+                : const SizedBox(height: 20),
+          ),
+          const SizedBox(height: 6),
           // Multiplier toggle
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -187,6 +208,84 @@ class _DartChip extends StatelessWidget {
           fontSize: 13,
         ),
       ),
+    );
+  }
+}
+
+class _LiveScoreBar extends StatelessWidget {
+  const _LiveScoreBar({
+    super.key,
+    required this.subtotal,
+    required this.projected,
+    required this.checkoutRoute,
+    required this.accent,
+  });
+
+  final int subtotal;
+  final int projected;
+  final String? checkoutRoute;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Turn: $subtotal',
+                style: const TextStyle(fontSize: 13, color: Colors.white54),
+              ),
+              const SizedBox(width: 8),
+              const Text('→', style: TextStyle(color: Colors.white38)),
+              const SizedBox(width: 8),
+              Text(
+                '$projected left',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: projected <= 170 ? accent : Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (checkoutRoute != null) ...[
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accent.withOpacity(0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.track_changes, size: 12, color: accent),
+                const SizedBox(width: 5),
+                Text(
+                  checkoutRoute!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: accent,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

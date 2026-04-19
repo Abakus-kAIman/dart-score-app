@@ -5,6 +5,14 @@ class CheckoutTable {
 
   static bool hasCheckout(int remaining) => _routes.containsKey(remaining);
 
+  /// Returns the checkout route only when it fits within [maxDarts] darts.
+  static String? suggestForDartsLeft(int remaining, int maxDarts) {
+    final route = _routes[remaining];
+    if (route == null) return null;
+    final dartCount = route.split(' · ').length;
+    return dartCount <= maxDarts ? route : null;
+  }
+
   static const Map<int, String> _routes = {
     // ── 1-dart (doubles + bull) ──────────────────────────────────────────
     2: 'D1', 4: 'D2', 6: 'D3', 8: 'D4', 10: 'D5',
