@@ -121,65 +121,90 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
       orElse: () => match.players.first,
     );
     final wins = match.legWins;
-    final scoreText =
-        match.players.map((p) => '${p.name}  ${wins[p.id] ?? 0}').join('   ');
 
     showDialog(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
+      barrierColor: Colors.black87,
       builder: (ctx) {
-        Future.delayed(const Duration(milliseconds: 2800), () {
+        Future.delayed(const Duration(seconds: 10), () {
           if (ctx.mounted) Navigator.of(ctx).pop();
         });
 
-        return AlertDialog(
+        return Dialog(
           backgroundColor: const Color(0xFF1A1A1A),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'CHECKOUT!',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                  letterSpacing: 2,
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 36, 32, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'CHECKOUT!',
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                    letterSpacing: 3,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                winner.name,
-                style: const TextStyle(
-                    fontSize: 26, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'won leg ${completedLeg.legNumber}',
-                style: const TextStyle(color: Colors.white54, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  scoreText,
+                const SizedBox(height: 16),
+                Text(
+                  winner.name,
                   style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.bold),
+                      fontSize: 34, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Continue'),
+                const SizedBox(height: 4),
+                Text(
+                  'won leg ${completedLeg.legNumber}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                // Score tally — one row per player
+                ...match.players.map((p) {
+                  final w = wins[p.id] ?? 0;
+                  final isWinner = p.id == winner.id;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          p.name,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: isWinner
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isWinner
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.white70,
+                          ),
+                        ),
+                        Text(
+                          '$w',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: isWinner
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.white38,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Continue →',
+                      style: TextStyle(fontSize: 16)),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -392,10 +417,18 @@ class _ScoreBoard extends ConsumerWidget {
     final others =
         match.players.where((p) => p.id != currentPlayerId).toList();
 
-    final checkoutRoute = CheckoutTable.suggest(currentRemaining);
+    // Watch live dart input to show projected remaining in the card
+    final dartInput = ref.watch(dartInputProvider);
+    final dartSubtotal = dartInput.fold(0, (sum, d) => sum + d.points);
+    final hasDartsInProgress = dartSubtotal > 0;
+    final projected = currentRemaining - dartSubtotal;
+
+    final accent = Theme.of(context).colorScheme.primary;
+    final displayRemaining = hasDartsInProgress ? projected : currentRemaining;
+    final checkoutRoute = CheckoutTable.suggest(displayRemaining);
     final canCheckout = match.doubleOut
-        ? currentRemaining <= 170 && currentRemaining > 1
-        : currentRemaining <= 180 && currentRemaining > 0;
+        ? displayRemaining <= 170 && displayRemaining > 1
+        : displayRemaining <= 180 && displayRemaining > 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -416,16 +449,33 @@ class _ScoreBoard extends ConsumerWidget {
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    '$currentRemaining',
-                    style: Theme.of(context).textTheme.displayLarge,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    child: Text(
+                      '$displayRemaining',
+                      key: ValueKey(displayRemaining),
+                      style: hasDartsInProgress
+                          ? TextStyle(
+                              fontSize: 80,
+                              fontWeight: FontWeight.bold,
+                              color: accent,
+                              height: 1.1,
+                            )
+                          : Theme.of(context).textTheme.displayLarge,
+                    ),
                   ),
+                  if (hasDartsInProgress)
+                    Text(
+                      '−$dartSubtotal this turn  (was $currentRemaining)',
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 12),
+                    ),
                   if (canCheckout) ...[
                     const SizedBox(height: 6),
                     _CheckoutBadge(
                       route: checkoutRoute,
                       doubleOut: match.doubleOut,
-                      remaining: currentRemaining,
+                      remaining: displayRemaining,
                     ),
                   ],
                 ],
