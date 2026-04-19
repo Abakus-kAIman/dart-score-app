@@ -8,13 +8,22 @@ import '../screens/history/history_screen.dart';
 import '../screens/history/match_detail_screen.dart';
 import '../models/match.dart';
 
+// Notifies go_router when game state changes so the redirect re-evaluates,
+// without recreating the GoRouter instance (which would reset navigation).
+class _RouterNotifier extends ChangeNotifier {
+  _RouterNotifier(Ref ref) {
+    ref.listen<DartsMatch?>(gameProvider, (_, __) => notifyListeners());
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final gameState = ref.watch(gameProvider);
+  final notifier = _RouterNotifier(ref);
 
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: notifier,
     redirect: (context, state) {
-      final inGame = gameState != null;
+      final inGame = ref.read(gameProvider) != null;
       final onScoring = state.matchedLocation == '/scoring';
 
       if (inGame && !onScoring) return '/scoring';

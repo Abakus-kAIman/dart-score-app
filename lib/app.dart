@@ -7,7 +7,7 @@ class DartScoreApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
+    final router = ref.read(routerProvider);
     return MaterialApp.router(
       title: 'Darts Score',
       theme: _buildTheme(),
