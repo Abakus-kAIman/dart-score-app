@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/match.dart';
 import '../../models/turn.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/checkout_table.dart';
 import 'widgets/score_input_total.dart';
 import 'widgets/score_input_dart_by_dart.dart';
 import 'widgets/turn_history_panel.dart';
@@ -22,7 +23,6 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
   Future<void> _submitTotal(int score) async {
     final match = ref.read(gameProvider)!;
 
-    // With double-out, hitting exactly 0 requires asking about finish dart
     if (match.doubleOut) {
       final currentId = ref.read(gameProvider.notifier).currentPlayerId!;
       final remaining =
@@ -84,41 +84,134 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
     if (result == TurnResult.matchWon) {
       _showMatchWonDialog();
     } else if (result == TurnResult.legWon) {
-      _showLegWonSnackbar();
+      _showLegWonDialog();
     }
   }
 
-  void _showLegWonSnackbar() {
-    // Match is still in state here; show brief notification
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Leg won! Next leg starting...'),
-        duration: Duration(seconds: 2),
-      ),
+  void _showLegWonDialog() {
+    final match = ref.read(gameProvider);
+    if (match == null) return;
+
+    final completedLeg = match.legs[match.currentLegIndex - 1];
+    final winner = match.players.firstWhere(
+      (p) => p.id == completedLeg.winnerId,
+      orElse: () => match.players.first,
+    );
+    final wins = match.legWins;
+    final scoreText =
+        match.players.map((p) => '${p.name}  ${wins[p.id] ?? 0}').join('   ');
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        Future.delayed(const Duration(milliseconds: 2800), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'CHECKOUT!',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                winner.name,
+                style: const TextStyle(
+                    fontSize: 26, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'won leg ${completedLeg.legNumber}',
+                style: const TextStyle(color: Colors.white54, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2A2A),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  scoreText,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
     );
   }
 
   void _showMatchWonDialog() {
+    final winnerName =
+        ref.read(gameProvider.notifier).lastWinnerName ?? 'Player';
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Match Over!'),
-        content: const Text('The match has been saved to history.'),
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '🏆',
+              style: const TextStyle(fontSize: 48),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              winnerName,
+              style: const TextStyle(
+                  fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'wins the match!',
+              style: TextStyle(color: Colors.white54, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Match saved to history.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ),
         actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.go('/');
-            },
-            child: const Text('New Game'),
-          ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.go('/history');
             },
             child: const Text('View History'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/');
+            },
+            child: const Text('New Game'),
           ),
         ],
       ),
@@ -137,8 +230,8 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
               child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Abandon', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Abandon',
+                style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -170,8 +263,7 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
           IconButton(
             tooltip: 'Undo last turn',
             icon: const Icon(Icons.undo),
-            onPressed: () =>
-                ref.read(gameProvider.notifier).undoLastTurn(),
+            onPressed: () => ref.read(gameProvider.notifier).undoLastTurn(),
           ),
           IconButton(
             tooltip: 'Turn history',
@@ -245,16 +337,15 @@ class _MatchScoreHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wins = match.legWins;
-    final scoreText = match.players
-        .map((p) => '${p.name} ${wins[p.id] ?? 0}')
-        .join(' – ');
-    final legText = 'Leg ${match.currentLegIndex + 1}';
+    final scoreText =
+        match.players.map((p) => '${p.name} ${wins[p.id] ?? 0}').join(' – ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(scoreText,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        Text(legText,
+            style:
+                const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        Text('Leg ${match.currentLegIndex + 1}',
             style: const TextStyle(fontSize: 11, color: Colors.white54)),
       ],
     );
@@ -275,18 +366,26 @@ class _ScoreBoard extends ConsumerWidget {
     final currentPlayer =
         match.players.firstWhere((p) => p.id == currentPlayerId);
     final currentRemaining = notifier.remainingForPlayer(currentPlayerId);
+    final others =
+        match.players.where((p) => p.id != currentPlayerId).toList();
 
-    final others = match.players.where((p) => p.id != currentPlayerId).toList();
+    final checkoutRoute = CheckoutTable.suggest(currentRemaining);
+    final canCheckout = match.doubleOut
+        ? currentRemaining <= 170 && currentRemaining > 1
+        : currentRemaining <= 180 && currentRemaining > 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         children: [
-          // Active player — big display
+          // ── Active player card ──────────────────────────────────────────
           Card(
-            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .primaryContainer
+                .withOpacity(0.3),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Column(
                 children: [
                   Text(
@@ -298,28 +397,28 @@ class _ScoreBoard extends ConsumerWidget {
                     '$currentRemaining',
                     style: Theme.of(context).textTheme.displayLarge,
                   ),
-                  if (match.doubleOut && currentRemaining <= 170 && currentRemaining > 1)
-                    Text(
-                      'Checkout!',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
+                  if (canCheckout) ...[
+                    const SizedBox(height: 6),
+                    _CheckoutBadge(
+                      route: checkoutRoute,
+                      doubleOut: match.doubleOut,
+                      remaining: currentRemaining,
                     ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 12),
-          // Other players
+          // ── Other players ───────────────────────────────────────────────
           ...others.map((p) {
             final rem = notifier.remainingForPlayer(p.id);
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Card(
                 child: ListTile(
-                  leading:
-                      const Icon(Icons.person_outline, color: Colors.white54),
+                  leading: const Icon(Icons.person_outline,
+                      color: Colors.white54),
                   title: Text(p.name),
                   trailing: Text(
                     '$rem',
@@ -330,6 +429,86 @@ class _ScoreBoard extends ConsumerWidget {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+class _CheckoutBadge extends StatelessWidget {
+  const _CheckoutBadge({
+    required this.route,
+    required this.doubleOut,
+    required this.remaining,
+  });
+
+  final String? route;
+  final bool doubleOut;
+  final int remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+
+    if (!doubleOut) {
+      // Straight-out: just flag it's reachable in ≤ 3 darts
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accent.withOpacity(0.4)),
+        ),
+        child: Text(
+          'Finish possible',
+          style: TextStyle(
+              color: accent, fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+      );
+    }
+
+    if (route == null) {
+      // Impossible checkout (e.g. 169)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.orange.withOpacity(0.4)),
+        ),
+        child: const Text(
+          'No standard checkout',
+          style: TextStyle(
+              color: Colors.orangeAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 12),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.track_changes, size: 14, color: accent),
+          const SizedBox(width: 6),
+          Text(
+            route!,
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              letterSpacing: 0.5,
+            ),
+          ),
         ],
       ),
     );

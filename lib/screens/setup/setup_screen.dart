@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/storage_service.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -22,6 +23,43 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _customScoreController = TextEditingController();
   bool _useCustomScore = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLastSettings();
+  }
+
+  Future<void> _loadLastSettings() async {
+    final storage = await StorageService.getInstance();
+    final settings = await storage.loadLastSettings();
+    if (settings == null || !mounted) return;
+
+    final names = (settings['playerNames'] as List?)?.cast<String>() ?? [];
+    final score = settings['startingScore'] as int? ?? 501;
+    final doubleOut = settings['doubleOut'] as bool? ?? true;
+    final legs = settings['legsToWin'] as int? ?? 3;
+
+    setState(() {
+      // Rebuild player controllers to match saved count
+      for (final c in _playerControllers) c.dispose();
+      _playerControllers.clear();
+      final count = names.length.clamp(2, 8);
+      for (var i = 0; i < count; i++) {
+        _playerControllers.add(TextEditingController(text: i < names.length ? names[i] : ''));
+      }
+
+      if (score == 301 || score == 501) {
+        _startingScore = score;
+        _useCustomScore = false;
+      } else {
+        _useCustomScore = true;
+        _customScoreController.text = '$score';
+      }
+      _doubleOut = doubleOut;
+      _legsToWin = legs;
+    });
+  }
 
   @override
   void dispose() {
@@ -60,6 +98,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     }
 
     final names = _playerControllers.map((c) => c.text.trim()).toList();
+
+    final storage = await StorageService.getInstance();
+    await storage.saveLastSettings(
+      playerNames: names,
+      startingScore: score,
+      doubleOut: _doubleOut,
+      legsToWin: _legsToWin,
+    );
 
     await ref.read(gameProvider.notifier).startMatch(
           playerNames: names,

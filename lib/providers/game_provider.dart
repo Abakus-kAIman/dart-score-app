@@ -21,6 +21,9 @@ final storageServiceProvider = FutureProvider<StorageService>((ref) async {
 // Active match state
 // ---------------------------------------------------------------------------
 class GameNotifier extends Notifier<DartsMatch?> {
+  /// Preserved after match completes so the UI can read it after state → null.
+  String? lastWinnerName;
+
   @override
   DartsMatch? build() => null;
 
@@ -96,6 +99,7 @@ class GameNotifier extends Notifier<DartsMatch?> {
   }
 
   Future<void> _completeMatch(String winnerId) async {
+    lastWinnerName = _playerById(winnerId).name;
     final storage = await StorageService.getInstance();
     final completed = state!.copyWith(completed: true, winnerId: winnerId);
     await storage.saveCompletedMatch(completed);

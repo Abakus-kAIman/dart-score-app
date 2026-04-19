@@ -5,6 +5,7 @@ import '../models/match.dart';
 class StorageService {
   static const _matchesKey = 'completed_matches';
   static const _activeMatchKey = 'active_match';
+  static const _lastSettingsKey = 'last_settings';
 
   static StorageService? _instance;
   late SharedPreferences _prefs;
@@ -54,6 +55,33 @@ class StorageService {
           .toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  Future<void> saveLastSettings({
+    required List<String> playerNames,
+    required int startingScore,
+    required bool doubleOut,
+    required int legsToWin,
+  }) async {
+    await _prefs.setString(
+      _lastSettingsKey,
+      jsonEncode({
+        'playerNames': playerNames,
+        'startingScore': startingScore,
+        'doubleOut': doubleOut,
+        'legsToWin': legsToWin,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>?> loadLastSettings() async {
+    final raw = _prefs.getString(_lastSettingsKey);
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
     }
   }
 }
