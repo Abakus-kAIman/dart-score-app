@@ -39,17 +39,30 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
   @override
   Widget build(BuildContext context) {
     final darts = ref.watch(dartInputProvider);
+
+    // Auto-confirm as soon as the 3rd dart is registered
+    ref.listen<List<DartThrow>>(dartInputProvider, (prev, next) {
+      if (next.length == 3) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onConfirm();
+        });
+      }
+    });
+
     final notifier = ref.read(dartInputProvider.notifier);
     final isFull = notifier.isFull;
     final subtotal = notifier.subtotal;
     final accent = Theme.of(context).colorScheme.primary;
 
-    final projected = widget.playerRemaining - subtotal;
+    // Before any dart: show checkout for full remaining with 3 darts.
+    // After darts entered: show checkout for projected remaining with darts left.
     final dartsLeft = 3 - darts.length;
-    final liveCheckout = (subtotal > 0 && projected >= 2 && projected <= 170)
-        ? CheckoutTable.suggestForDartsLeft(projected, dartsLeft)
+    final routeRemaining = subtotal == 0 ? widget.playerRemaining : widget.playerRemaining - subtotal;
+    final routeDartsLeft = subtotal == 0 ? 3 : dartsLeft;
+    final liveCheckout = (routeRemaining >= 2 && routeRemaining <= 170)
+        ? CheckoutTable.suggestForDartsLeft(routeRemaining, routeDartsLeft)
         : null;
-    final showLive = subtotal > 0;
+    final showBar = widget.playerRemaining <= 170 || subtotal > 0;
 
     return Container(
       color: const Color(0xFF1A1A1A),
@@ -73,14 +86,15 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             ],
           ),
           const SizedBox(height: 6),
-          // Live score row
+          // Live score / checkout bar
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: showLive
+            child: showBar
                 ? _LiveScoreBar(
-                    key: ValueKey(projected),
+                    key: ValueKey('$subtotal-$routeRemaining'),
                     subtotal: subtotal,
-                    projected: projected,
+                    projected: routeRemaining,
+                    showTurnScore: subtotal > 0,
                     checkoutRoute: liveCheckout,
                     accent: accent,
                   )
@@ -116,7 +130,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             ],
           ),
           const SizedBox(height: 8),
-          // Number grid — shrinkWrap so it shows all 3 rows naturally
+          // Number grid
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -126,7 +140,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
               crossAxisSpacing: 4,
               mainAxisExtent: 42,
             ),
-            itemCount: 21, // 1–20 + bull
+            itemCount: 21,
             itemBuilder: (ctx, i) {
               final value = i == 20 ? 25 : i + 1;
               final label = value == 25 ? 'Bull' : '$value';
@@ -139,7 +153,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             },
           ),
           const SizedBox(height: 8),
-          // Action row
+          // Action row — Confirm only shown for partial turns (early checkout)
           Row(
             children: [
               ElevatedButton.icon(
@@ -154,7 +168,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                 ),
               ),
               const Spacer(),
-              if (darts.isNotEmpty)
+              if (darts.isNotEmpty) ...[
                 TextButton.icon(
                   onPressed: () {
                     ref.read(dartInputProvider.notifier).removeLast();
@@ -163,12 +177,15 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                   icon: const Icon(Icons.backspace_outlined, size: 16),
                   label: const Text('Undo'),
                 ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: darts.isEmpty ? null : widget.onConfirm,
-                child: const Text('Confirm Turn',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
+                if (!isFull) ...[
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: widget.onConfirm,
+                    child: const Text('Confirm',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
             ],
           ),
         ],
@@ -217,12 +234,14 @@ class _LiveScoreBar extends StatelessWidget {
     super.key,
     required this.subtotal,
     required this.projected,
+    required this.showTurnScore,
     required this.checkoutRoute,
     required this.accent,
   });
 
   final int subtotal;
   final int projected;
+  final bool showTurnScore;
   final String? checkoutRoute;
   final Color accent;
 
@@ -231,35 +250,36 @@ class _LiveScoreBar extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2A),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Turn: $subtotal',
-                style: const TextStyle(fontSize: 13, color: Colors.white54),
-              ),
-              const SizedBox(width: 8),
-              const Text('→', style: TextStyle(color: Colors.white38)),
-              const SizedBox(width: 8),
-              Text(
-                '$projected left',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: projected <= 170 ? accent : Colors.white,
+        if (showTurnScore)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2A2A2A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Turn: $subtotal',
+                  style: const TextStyle(fontSize: 13, color: Colors.white54),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                const Text('→', style: TextStyle(color: Colors.white38)),
+                const SizedBox(width: 8),
+                Text(
+                  '$projected left',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: projected <= 170 ? accent : Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         if (checkoutRoute != null) ...[
-          const SizedBox(width: 10),
+          if (showTurnScore) const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
