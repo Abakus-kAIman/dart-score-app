@@ -1,0 +1,4 @@
+Place your splash screen logo PNG here as: splash.png
+Recommended: transparent background, centred logo, ~600x600 px.
+Background colour (#121212 black) is applied automatically.
+Then run: flutter pub run flutter_native_splash:create

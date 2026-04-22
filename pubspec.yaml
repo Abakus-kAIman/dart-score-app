@@ -24,6 +24,31 @@ dev_dependencies:
   build_runner: ^2.4.7
   riverpod_generator: ^2.3.9
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
+# ── App icon generation ───────────────────────────────────────────────────────
+# Place a 1024×1024 PNG at assets/icon/icon.png, then run:
+#   flutter pub run flutter_launcher_icons
+flutter_launcher_icons:
+  ios: true
+  android: false
+  remove_alpha_ios: true
+  image_path: "assets/icon/icon.png"
+
+# ── Splash screen generation ──────────────────────────────────────────────────
+# Place your splash logo PNG at assets/splash/splash.png, then run:
+#   flutter pub run flutter_native_splash:create
+flutter_native_splash:
+  color: "#121212"
+  image: assets/splash/splash.png
+  color_dark: "#121212"
+  image_dark: assets/splash/splash.png
+  ios: true
+  android: false
+  web: false
+  fullscreen: true
+  ios_content_mode: scaleAspectFit
 
 flutter:
   uses-material-design: true
