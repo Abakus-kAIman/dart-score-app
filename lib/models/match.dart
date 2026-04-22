@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'player.dart';
 import 'leg.dart';
 
+enum GameMode { standard, countUp }
+
 @immutable
 class DartsMatch {
   const DartsMatch({
@@ -15,6 +17,8 @@ class DartsMatch {
     required this.completed,
     required this.legs,
     this.winnerId,
+    this.gameMode = GameMode.standard,
+    this.maxTurnsPerLeg = 0,
   });
 
   final String id;
@@ -27,6 +31,10 @@ class DartsMatch {
   final bool completed;
   final String? winnerId;
   final List<Leg> legs;
+  final GameMode gameMode;
+  final int maxTurnsPerLeg; // 0 = no limit (standard); count-up always > 0
+
+  bool get isCountUp => gameMode == GameMode.countUp;
 
   Leg get currentLeg => legs[currentLegIndex];
 
@@ -58,6 +66,9 @@ class DartsMatch {
         legs: (json['legs'] as List<dynamic>)
             .map((l) => Leg.fromJson(l as Map<String, dynamic>))
             .toList(),
+        gameMode: GameMode.values.byName(
+            json['gameMode'] as String? ?? 'standard'),
+        maxTurnsPerLeg: json['maxTurnsPerLeg'] as int? ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -71,6 +82,8 @@ class DartsMatch {
         'completed': completed,
         'winnerId': winnerId,
         'legs': legs.map((l) => l.toJson()).toList(),
+        'gameMode': gameMode.name,
+        'maxTurnsPerLeg': maxTurnsPerLeg,
       };
 
   DartsMatch copyWith({
@@ -85,6 +98,8 @@ class DartsMatch {
     String? winnerId,
     List<Leg>? legs,
     bool clearWinner = false,
+    GameMode? gameMode,
+    int? maxTurnsPerLeg,
   }) =>
       DartsMatch(
         id: id ?? this.id,
@@ -97,5 +112,7 @@ class DartsMatch {
         completed: completed ?? this.completed,
         winnerId: clearWinner ? null : (winnerId ?? this.winnerId),
         legs: legs ?? this.legs,
+        gameMode: gameMode ?? this.gameMode,
+        maxTurnsPerLeg: maxTurnsPerLeg ?? this.maxTurnsPerLeg,
       );
 }

@@ -121,6 +121,17 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
       orElse: () => match.players.first,
     );
     final wins = match.legWins;
+    final isCountUp = match.isCountUp;
+    final isTurnLimit = !isCountUp &&
+        match.maxTurnsPerLeg > 0 &&
+        completedLeg.turns.length ==
+            match.maxTurnsPerLeg * match.players.length;
+
+    final headline = isCountUp
+        ? 'LEG COMPLETE!'
+        : isTurnLimit
+            ? 'TIME\'S UP!'
+            : 'CHECKOUT!';
 
     showDialog(
       context: context,
@@ -141,7 +152,7 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'CHECKOUT!',
+                  headline,
                   style: TextStyle(
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
@@ -161,10 +172,23 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
                   style: const TextStyle(color: Colors.white54, fontSize: 16),
                 ),
                 const SizedBox(height: 24),
-                // Score tally — one row per player
+                // Score tally — leg wins per player + count-up scores
                 ...match.players.map((p) {
                   final w = wins[p.id] ?? 0;
                   final isWinner = p.id == winner.id;
+                  final accent = Theme.of(context).colorScheme.primary;
+
+                  // In count-up show each player's score for this leg.
+                  String? legScore;
+                  if (isCountUp) {
+                    final pTurns = completedLeg.turns
+                        .where((t) => t.playerId == p.id);
+                    final s = pTurns.isEmpty
+                        ? 0
+                        : pTurns.last.remainingAfter;
+                    legScore = '$s pts';
+                  }
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
@@ -177,20 +201,33 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
                             fontWeight: isWinner
                                 ? FontWeight.bold
                                 : FontWeight.normal,
-                            color: isWinner
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.white70,
+                            color: isWinner ? accent : Colors.white70,
                           ),
                         ),
-                        Text(
-                          '$w',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: isWinner
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.white38,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (legScore != null)
+                              Text(
+                                legScore,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isWinner
+                                      ? accent
+                                      : Colors.white38,
+                                ),
+                              ),
+                            if (legScore != null)
+                              const SizedBox(width: 12),
+                            Text(
+                              '$w',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: isWinner ? accent : Colors.white38,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -331,7 +368,10 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
           icon: const Icon(Icons.close),
           onPressed: _confirmAbandon,
         ),
-        title: _MatchScoreHeader(match: match),
+        title: _MatchScoreHeader(
+          match: match,
+          currentRound: ref.read(gameProvider.notifier).currentRound,
+        ),
         actions: [
           if (match.currentLeg.turns.isEmpty)
             IconButton(
@@ -410,8 +450,9 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
 // ---------------------------------------------------------------------------
 
 class _MatchScoreHeader extends StatelessWidget {
-  const _MatchScoreHeader({required this.match});
+  const _MatchScoreHeader({required this.match, required this.currentRound});
   final DartsMatch match;
+  final int currentRound;
 
   @override
   Widget build(BuildContext context) {
@@ -421,18 +462,23 @@ class _MatchScoreHeader extends StatelessWidget {
     final startIdx = match.currentLeg.startPlayerIndex;
     final startName = match.players[startIdx].name;
     final legStarted = match.currentLeg.turns.isNotEmpty;
+
+    final roundLabel = match.maxTurnsPerLeg > 0
+        ? 'Round $currentRound of ${match.maxTurnsPerLeg}'
+        : 'Round $currentRound';
+
+    final subtitle = legStarted
+        ? 'Leg ${match.currentLegIndex + 1} · $roundLabel'
+        : 'Leg ${match.currentLegIndex + 1} · $startName throws first';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(scoreText,
             style:
                 const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        Text(
-          legStarted
-              ? 'Leg ${match.currentLegIndex + 1}'
-              : 'Leg ${match.currentLegIndex + 1} · $startName throws first',
-          style: const TextStyle(fontSize: 11, color: Colors.white54),
-        ),
+        Text(subtitle,
+            style: const TextStyle(fontSize: 11, color: Colors.white54)),
       ],
     );
   }
@@ -449,24 +495,30 @@ class _ScoreBoard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(gameProvider.notifier);
+    final isCountUp = match.isCountUp;
     final currentPlayer =
         match.players.firstWhere((p) => p.id == currentPlayerId);
-    final currentRemaining = notifier.remainingForPlayer(currentPlayerId);
+    final currentScore = notifier.remainingForPlayer(currentPlayerId);
     final others =
         match.players.where((p) => p.id != currentPlayerId).toList();
 
-    // Watch live dart input to show projected remaining in the card
     final dartInput = ref.watch(dartInputProvider);
     final dartSubtotal = dartInput.fold(0, (sum, d) => sum + d.points);
     final hasDartsInProgress = dartSubtotal > 0;
-    final projected = currentRemaining - dartSubtotal;
+
+    // Count-up accumulates; standard subtracts.
+    final projected = isCountUp
+        ? currentScore + dartSubtotal
+        : currentScore - dartSubtotal;
+    final displayScore = hasDartsInProgress ? projected : currentScore;
 
     final accent = Theme.of(context).colorScheme.primary;
-    final displayRemaining = hasDartsInProgress ? projected : currentRemaining;
-    final checkoutRoute = CheckoutTable.suggest(displayRemaining);
-    final canCheckout = match.doubleOut
-        ? displayRemaining <= 170 && displayRemaining > 1
-        : displayRemaining <= 180 && displayRemaining > 0;
+    final checkoutRoute =
+        isCountUp ? null : CheckoutTable.suggest(displayScore);
+    final canCheckout = !isCountUp &&
+        (match.doubleOut
+            ? displayScore <= 170 && displayScore > 1
+            : displayScore <= 180 && displayScore > 0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -490,8 +542,8 @@ class _ScoreBoard extends ConsumerWidget {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 150),
                     child: Text(
-                      '$displayRemaining',
-                      key: ValueKey(displayRemaining),
+                      '$displayScore',
+                      key: ValueKey(displayScore),
                       style: hasDartsInProgress
                           ? TextStyle(
                               fontSize: 80,
@@ -504,16 +556,34 @@ class _ScoreBoard extends ConsumerWidget {
                   ),
                   if (hasDartsInProgress)
                     Text(
-                      '−$dartSubtotal this turn  (was $currentRemaining)',
+                      isCountUp
+                          ? '+$dartSubtotal this turn  (was $currentScore)'
+                          : '−$dartSubtotal this turn  (was $currentScore)',
                       style: const TextStyle(
                           color: Colors.white38, fontSize: 12),
+                    ),
+                  if (!isCountUp && !hasDartsInProgress)
+                    Text(
+                      'left',
+                      style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  if (isCountUp && !hasDartsInProgress)
+                    Text(
+                      'score',
+                      style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
                     ),
                   if (canCheckout) ...[
                     const SizedBox(height: 6),
                     _CheckoutBadge(
                       route: checkoutRoute,
                       doubleOut: match.doubleOut,
-                      remaining: displayRemaining,
+                      remaining: displayScore,
                     ),
                   ],
                 ],
@@ -523,7 +593,7 @@ class _ScoreBoard extends ConsumerWidget {
           const SizedBox(height: 12),
           // ── Other players ───────────────────────────────────────────────
           ...others.map((p) {
-            final rem = notifier.remainingForPlayer(p.id);
+            final score = notifier.remainingForPlayer(p.id);
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Card(
@@ -532,7 +602,7 @@ class _ScoreBoard extends ConsumerWidget {
                       color: Colors.white54),
                   title: Text(p.name),
                   trailing: Text(
-                    '$rem',
+                    '$score',
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold),
                   ),

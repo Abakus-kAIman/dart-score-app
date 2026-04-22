@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/match.dart';
+import '../models/match.dart'; // provides GameMode
 
 class StorageService {
   static const _matchesKey = 'completed_matches';
@@ -64,6 +64,8 @@ class StorageService {
     required int startingScore,
     required bool doubleOut,
     required int legsToWin,
+    GameMode gameMode = GameMode.standard,
+    int maxTurnsPerLeg = 0,
   }) async {
     await _prefs.setString(
       _lastSettingsKey,
@@ -72,6 +74,8 @@ class StorageService {
         'startingScore': startingScore,
         'doubleOut': doubleOut,
         'legsToWin': legsToWin,
+        'gameMode': gameMode.name,
+        'maxTurnsPerLeg': maxTurnsPerLeg,
       }),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/dart_throw.dart';
+import '../../../models/match.dart';
 import '../../../providers/game_provider.dart';
 import '../../../utils/checkout_table.dart';
 
@@ -53,16 +54,25 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
     final isFull = notifier.isFull;
     final subtotal = notifier.subtotal;
     final accent = Theme.of(context).colorScheme.primary;
+    final isCountUp = ref.watch(gameProvider)?.isCountUp ?? false;
 
-    // Before any dart: show checkout for full remaining with 3 darts.
-    // After darts entered: show checkout for projected remaining with darts left.
+    // Projected value depends on mode.
     final dartsLeft = 3 - darts.length;
-    final routeRemaining = subtotal == 0 ? widget.playerRemaining : widget.playerRemaining - subtotal;
+    final projected = isCountUp
+        ? widget.playerRemaining + subtotal
+        : widget.playerRemaining - subtotal;
+
+    // Checkout hint — standard mode only, filtered to darts remaining.
+    final routeRemaining =
+        subtotal == 0 ? widget.playerRemaining : projected;
     final routeDartsLeft = subtotal == 0 ? 3 : dartsLeft;
-    final liveCheckout = (routeRemaining >= 2 && routeRemaining <= 170)
+    final liveCheckout = (!isCountUp &&
+            routeRemaining >= 2 &&
+            routeRemaining <= 170)
         ? CheckoutTable.suggestForDartsLeft(routeRemaining, routeDartsLeft)
         : null;
-    final showBar = widget.playerRemaining <= 170 || subtotal > 0;
+    final showBar =
+        isCountUp ? subtotal > 0 : (widget.playerRemaining <= 170 || subtotal > 0);
 
     return Container(
       color: const Color(0xFF1A1A1A),
@@ -91,11 +101,12 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             duration: const Duration(milliseconds: 200),
             child: showBar
                 ? _LiveScoreBar(
-                    key: ValueKey('$subtotal-$routeRemaining'),
+                    key: ValueKey('$subtotal-$projected'),
                     subtotal: subtotal,
-                    projected: routeRemaining,
+                    projected: projected,
                     showTurnScore: subtotal > 0,
                     checkoutRoute: liveCheckout,
+                    isCountUp: isCountUp,
                     accent: accent,
                   )
                 : const SizedBox(height: 20),
@@ -236,6 +247,7 @@ class _LiveScoreBar extends StatelessWidget {
     required this.projected,
     required this.showTurnScore,
     required this.checkoutRoute,
+    required this.isCountUp,
     required this.accent,
   });
 
@@ -243,6 +255,7 @@ class _LiveScoreBar extends StatelessWidget {
   final int projected;
   final bool showTurnScore;
   final String? checkoutRoute;
+  final bool isCountUp;
   final Color accent;
 
   @override
@@ -268,11 +281,13 @@ class _LiveScoreBar extends StatelessWidget {
                 const Text('→', style: TextStyle(color: Colors.white38)),
                 const SizedBox(width: 8),
                 Text(
-                  '$projected left',
+                  isCountUp ? '$projected total' : '$projected left',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: projected <= 170 ? accent : Colors.white,
+                    color: (!isCountUp && projected <= 170)
+                        ? accent
+                        : Colors.white,
                   ),
                 ),
               ],
