@@ -67,17 +67,17 @@ class GameNotifier extends Notifier<DartsMatch?> {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  Leg _createLeg(int legNumber) => Leg(
+  Leg _createLeg(int legNumber, {int startPlayerIndex = 0}) => Leg(
         id: _uuid.v4(),
         legNumber: legNumber,
         turns: const [],
+        startPlayerIndex: startPlayerIndex,
       );
 
   String _currentPlayerId() {
     final match = state!;
     final leg = match.currentLeg;
-    // Round-robin based on number of completed turns in this leg
-    final idx = leg.turns.length % match.players.length;
+    final idx = (leg.startPlayerIndex + leg.turns.length) % match.players.length;
     return match.players[idx].id;
   }
 
@@ -193,9 +193,10 @@ class GameNotifier extends Notifier<DartsMatch?> {
         return TurnResult.matchWon;
       }
 
-      // Start next leg — winner throws first (leg index determines order)
+      // Start next leg — rotate starting player by one each leg
       final nextLegNumber = match.currentLegIndex + 2;
-      final nextLeg = _createLeg(nextLegNumber);
+      final nextStartPlayerIndex = (match.currentLegIndex + 1) % match.players.length;
+      final nextLeg = _createLeg(nextLegNumber, startPlayerIndex: nextStartPlayerIndex);
       newLegs.add(nextLeg);
       state = match.copyWith(
         legs: newLegs,
@@ -257,6 +258,24 @@ class GameNotifier extends Notifier<DartsMatch?> {
   // ── Derived getters ──────────────────────────────────────────────────────
 
   String? get currentPlayerId => state == null ? null : _currentPlayerId();
+
+  String? get legStartPlayerName {
+    if (state == null) return null;
+    final idx = state!.currentLeg.startPlayerIndex;
+    return state!.players[idx].name;
+  }
+
+  /// Change who throws first in the current leg. Only effective before any
+  /// turns have been taken in the leg.
+  Future<void> setLegStartPlayer(int playerIndex) async {
+    final match = state!;
+    if (match.currentLeg.turns.isNotEmpty) return;
+    final newLeg = match.currentLeg.copyWith(startPlayerIndex: playerIndex);
+    final newLegs = [...match.legs];
+    newLegs[match.currentLegIndex] = newLeg;
+    state = match.copyWith(legs: newLegs);
+    await _save();
+  }
 
   int remainingForPlayer(String playerId) {
     if (state == null) return 0;

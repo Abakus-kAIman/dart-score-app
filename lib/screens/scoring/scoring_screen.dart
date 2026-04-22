@@ -266,6 +266,31 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
     );
   }
 
+  Future<void> _changeStartingPlayer() async {
+    final match = ref.read(gameProvider)!;
+    if (match.currentLeg.turns.isNotEmpty) return;
+    final currentStartIdx = match.currentLeg.startPlayerIndex;
+
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Who throws first?'),
+        children: match.players.asMap().entries.map((e) {
+          return RadioListTile<int>(
+            title: Text(e.value.name),
+            value: e.key,
+            groupValue: currentStartIdx,
+            onChanged: (v) => Navigator.pop(ctx, v),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (selected != null) {
+      await ref.read(gameProvider.notifier).setLegStartPlayer(selected);
+    }
+  }
+
   Future<void> _confirmAbandon() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -308,6 +333,12 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
         ),
         title: _MatchScoreHeader(match: match),
         actions: [
+          if (match.currentLeg.turns.isEmpty)
+            IconButton(
+              tooltip: 'Change who throws first',
+              icon: const Icon(Icons.swap_vert),
+              onPressed: _changeStartingPlayer,
+            ),
           IconButton(
             tooltip: 'Undo last turn',
             icon: const Icon(Icons.undo),
@@ -387,14 +418,21 @@ class _MatchScoreHeader extends StatelessWidget {
     final wins = match.legWins;
     final scoreText =
         match.players.map((p) => '${p.name} ${wins[p.id] ?? 0}').join(' – ');
+    final startIdx = match.currentLeg.startPlayerIndex;
+    final startName = match.players[startIdx].name;
+    final legStarted = match.currentLeg.turns.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(scoreText,
             style:
                 const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        Text('Leg ${match.currentLegIndex + 1}',
-            style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        Text(
+          legStarted
+              ? 'Leg ${match.currentLegIndex + 1}'
+              : 'Leg ${match.currentLegIndex + 1} · $startName throws first',
+          style: const TextStyle(fontSize: 11, color: Colors.white54),
+        ),
       ],
     );
   }
