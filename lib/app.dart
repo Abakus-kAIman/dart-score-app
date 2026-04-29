@@ -9,7 +9,7 @@ class DartScoreApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.read(routerProvider);
     return MaterialApp.router(
-      title: 'Darts Score',
+      title: 'BullsEye Pro',
       theme: _buildTheme(),
       routerConfig: router,
       debugShowCheckedModeBanner: false,

@@ -35,6 +35,11 @@ flutter_launcher_icons:
   android: false
   remove_alpha_ios: true
   image_path: "assets/icon/icon.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#121212"
+    theme_color: "#E53935"
 
 # ── Splash screen generation ──────────────────────────────────────────────────
 # Place your splash logo PNG at assets/splash/splash.png, then run:

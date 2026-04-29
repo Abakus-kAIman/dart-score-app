@@ -1,21 +1,153 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Darts Score Counter">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Darts Score">
-  <meta name="msapplication-TileImage" content="icons/Icon-192.png">
-  <meta name="msapplication-TileColor" content="#00C853">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <!-- PWA / mobile app behaviour -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#121212">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Darts Score</title>
+  <meta name="description" content="Professional darts scoring — Standard 01, Count-Up, multi-player">
+
+  <!-- iOS home-screen PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BullsEye Pro">
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/Icon-512.png">
+
+  <title>BullsEye Pro</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* ── Baseline reset for native-app feel ────────────────────────────── */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      /* Respect notch / home-indicator safe areas */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    /* ── Splash / loading screen shown until Flutter is ready ───────────── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background: #121212;
+      z-index: 9999;
+      transition: opacity 0.35s ease;
+    }
+
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-logo {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+      background: #1E1E1E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 24px rgba(229, 57, 53, 0.25);
+    }
+
+    .loading-logo img {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+    }
+
+    .loading-wordmark {
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+                   'Helvetica Neue', sans-serif;
+    }
+
+    .loading-wordmark span:first-child {
+      display: block;
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+
+    .loading-wordmark span.pro {
+      color: #E53935;
+    }
+
+    .loading-tagline {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      color: #555;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Red spinner matching app accent */
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid #2A2A2A;
+      border-top-color: #E53935;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+
+  <!-- Loading screen visible until Flutter initialises -->
+  <div id="loading-overlay">
+    <div class="loading-logo">
+      <img src="icons/Icon-192.png" alt="BullsEye Pro" onerror="this.style.display='none'">
+    </div>
+    <div class="loading-wordmark">
+      <span>BullsEye <span class="pro">Pro</span></span>
+      <span class="loading-tagline">Focus · Score · Win</span>
+    </div>
+    <div class="spinner"></div>
+  </div>
+
+  <script>
+    // Hide the loading overlay once Flutter signals it is ready.
+    window.addEventListener('flutter-first-frame', function () {
+      var overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        overlay.classList.add('hidden');
+        setTimeout(function () { overlay.remove(); }, 400);
+      }
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
