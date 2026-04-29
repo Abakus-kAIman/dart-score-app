@@ -1,0 +1,2 @@
+Place your 1024x1024 app icon PNG here as: icon.png
+Then run: flutter pub run flutter_launcher_icons

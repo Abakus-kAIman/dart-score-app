@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/match.dart';
+import '../models/match.dart'; // provides GameMode
 
 class StorageService {
   static const _matchesKey = 'completed_matches';
   static const _activeMatchKey = 'active_match';
+  static const _lastSettingsKey = 'last_settings';
+  static const _inputModeKey = 'input_mode';
 
   static StorageService? _instance;
   late SharedPreferences _prefs;
@@ -55,5 +57,44 @@ class StorageService {
     } catch (_) {
       return [];
     }
+  }
+
+  Future<void> saveLastSettings({
+    required List<String> playerNames,
+    required int startingScore,
+    required bool doubleOut,
+    required int legsToWin,
+    GameMode gameMode = GameMode.standard,
+    int maxTurnsPerLeg = 0,
+  }) async {
+    await _prefs.setString(
+      _lastSettingsKey,
+      jsonEncode({
+        'playerNames': playerNames,
+        'startingScore': startingScore,
+        'doubleOut': doubleOut,
+        'legsToWin': legsToWin,
+        'gameMode': gameMode.name,
+        'maxTurnsPerLeg': maxTurnsPerLeg,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>?> loadLastSettings() async {
+    final raw = _prefs.getString(_lastSettingsKey);
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveInputMode(String mode) async {
+    await _prefs.setString(_inputModeKey, mode);
+  }
+
+  Future<String?> loadInputMode() async {
+    return _prefs.getString(_inputModeKey);
   }
 }

@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/dart_throw.dart';
+import '../../../models/match.dart';
 import '../../../providers/game_provider.dart';
+import '../../../utils/checkout_table.dart';
 
 class ScoreInputDartByDart extends ConsumerStatefulWidget {
-  const ScoreInputDartByDart({super.key, required this.onConfirm});
+  const ScoreInputDartByDart({
+    super.key,
+    required this.onConfirm,
+    required this.playerRemaining,
+  });
 
   final Future<void> Function() onConfirm;
+  final int playerRemaining;
 
   @override
   ConsumerState<ScoreInputDartByDart> createState() =>
@@ -33,10 +40,39 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
   @override
   Widget build(BuildContext context) {
     final darts = ref.watch(dartInputProvider);
+
+    // Auto-confirm as soon as the 3rd dart is registered
+    ref.listen<List<DartThrow>>(dartInputProvider, (prev, next) {
+      if (next.length == 3) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onConfirm();
+        });
+      }
+    });
+
     final notifier = ref.read(dartInputProvider.notifier);
     final isFull = notifier.isFull;
     final subtotal = notifier.subtotal;
     final accent = Theme.of(context).colorScheme.primary;
+    final isCountUp = ref.watch(gameProvider)?.isCountUp ?? false;
+
+    // Projected value depends on mode.
+    final dartsLeft = 3 - darts.length;
+    final projected = isCountUp
+        ? widget.playerRemaining + subtotal
+        : widget.playerRemaining - subtotal;
+
+    // Checkout hint — standard mode only, filtered to darts remaining.
+    final routeRemaining =
+        subtotal == 0 ? widget.playerRemaining : projected;
+    final routeDartsLeft = subtotal == 0 ? 3 : dartsLeft;
+    final liveCheckout = (!isCountUp &&
+            routeRemaining >= 2 &&
+            routeRemaining <= 170)
+        ? CheckoutTable.suggestForDartsLeft(routeRemaining, routeDartsLeft)
+        : null;
+    final showBar =
+        isCountUp ? subtotal > 0 : (widget.playerRemaining <= 170 || subtotal > 0);
 
     return Container(
       color: const Color(0xFF1A1A1A),
@@ -44,7 +80,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Dart slots + subtotal
+          // Dart slots
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -57,15 +93,25 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                     accent: accent,
                   ),
                 ),
-              const SizedBox(width: 16),
-              Text(
-                'Total: $subtotal',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold),
-              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          // Live score / checkout bar
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: showBar
+                ? _LiveScoreBar(
+                    key: ValueKey('$subtotal-$projected'),
+                    subtotal: subtotal,
+                    projected: projected,
+                    showTurnScore: subtotal > 0,
+                    checkoutRoute: liveCheckout,
+                    isCountUp: isCountUp,
+                    accent: accent,
+                  )
+                : const SizedBox(height: 20),
+          ),
+          const SizedBox(height: 6),
           // Multiplier toggle
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -95,7 +141,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             ],
           ),
           const SizedBox(height: 8),
-          // Number grid — shrinkWrap so it shows all 3 rows naturally
+          // Number grid
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -105,7 +151,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
               crossAxisSpacing: 4,
               mainAxisExtent: 42,
             ),
-            itemCount: 21, // 1–20 + bull
+            itemCount: 21,
             itemBuilder: (ctx, i) {
               final value = i == 20 ? 25 : i + 1;
               final label = value == 25 ? 'Bull' : '$value';
@@ -118,7 +164,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
             },
           ),
           const SizedBox(height: 8),
-          // Action row
+          // Action row — Confirm only shown for partial turns (early checkout)
           Row(
             children: [
               ElevatedButton.icon(
@@ -133,7 +179,7 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                 ),
               ),
               const Spacer(),
-              if (darts.isNotEmpty)
+              if (darts.isNotEmpty) ...[
                 TextButton.icon(
                   onPressed: () {
                     ref.read(dartInputProvider.notifier).removeLast();
@@ -142,12 +188,15 @@ class _ScoreInputDartByDartState extends ConsumerState<ScoreInputDartByDart> {
                   icon: const Icon(Icons.backspace_outlined, size: 16),
                   label: const Text('Undo'),
                 ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: darts.isEmpty ? null : widget.onConfirm,
-                child: const Text('Confirm Turn',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
+                if (!isFull) ...[
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: widget.onConfirm,
+                    child: const Text('Confirm',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
             ],
           ),
         ],
@@ -187,6 +236,91 @@ class _DartChip extends StatelessWidget {
           fontSize: 13,
         ),
       ),
+    );
+  }
+}
+
+class _LiveScoreBar extends StatelessWidget {
+  const _LiveScoreBar({
+    super.key,
+    required this.subtotal,
+    required this.projected,
+    required this.showTurnScore,
+    required this.checkoutRoute,
+    required this.isCountUp,
+    required this.accent,
+  });
+
+  final int subtotal;
+  final int projected;
+  final bool showTurnScore;
+  final String? checkoutRoute;
+  final bool isCountUp;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (showTurnScore)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2A2A2A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Turn: $subtotal',
+                  style: const TextStyle(fontSize: 13, color: Colors.white54),
+                ),
+                const SizedBox(width: 8),
+                const Text('→', style: TextStyle(color: Colors.white38)),
+                const SizedBox(width: 8),
+                Text(
+                  isCountUp ? '$projected total' : '$projected left',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: (!isCountUp && projected <= 170)
+                        ? accent
+                        : Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (checkoutRoute != null) ...[
+          if (showTurnScore) const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accent.withOpacity(0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.track_changes, size: 12, color: accent),
+                const SizedBox(width: 5),
+                Text(
+                  checkoutRoute!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: accent,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../models/match.dart';
 import '../../models/turn.dart';
 import '../../providers/game_provider.dart';
+import '../../utils/checkout_table.dart';
+import '../../utils/storage_service.dart';
 import 'widgets/score_input_total.dart';
 import 'widgets/score_input_dart_by_dart.dart';
 import 'widgets/turn_history_panel.dart';
@@ -19,10 +21,31 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
   TurnMode _inputMode = TurnMode.total;
   bool _historyVisible = false;
 
+  @override
+  void initState() {
+    super.initState();
+    StorageService.getInstance().then((s) async {
+      final mode = await s.loadInputMode();
+      if (mode != null && mounted) {
+        setState(() {
+          _inputMode =
+              mode == 'dartByDart' ? TurnMode.dartByDart : TurnMode.total;
+        });
+      }
+    });
+  }
+
+  void _setInputMode(TurnMode mode) {
+    setState(() => _inputMode = mode);
+    ref.read(dartInputProvider.notifier).clear();
+    StorageService.getInstance().then(
+      (s) => s.saveInputMode(mode == TurnMode.dartByDart ? 'dartByDart' : 'total'),
+    );
+  }
+
   Future<void> _submitTotal(int score) async {
     final match = ref.read(gameProvider)!;
 
-    // With double-out, hitting exactly 0 requires asking about finish dart
     if (match.doubleOut) {
       final currentId = ref.read(gameProvider.notifier).currentPlayerId!;
       final remaining =
@@ -84,35 +107,183 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
     if (result == TurnResult.matchWon) {
       _showMatchWonDialog();
     } else if (result == TurnResult.legWon) {
-      _showLegWonSnackbar();
+      _showLegWonDialog();
     }
   }
 
-  void _showLegWonSnackbar() {
-    // Match is still in state here; show brief notification
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Leg won! Next leg starting...'),
-        duration: Duration(seconds: 2),
-      ),
+  void _showLegWonDialog() {
+    final match = ref.read(gameProvider);
+    if (match == null) return;
+
+    final completedLeg = match.legs[match.currentLegIndex - 1];
+    final winner = match.players.firstWhere(
+      (p) => p.id == completedLeg.winnerId,
+      orElse: () => match.players.first,
+    );
+    final wins = match.legWins;
+    final isCountUp = match.isCountUp;
+    final isTurnLimit = !isCountUp &&
+        match.maxTurnsPerLeg > 0 &&
+        completedLeg.turns.length ==
+            match.maxTurnsPerLeg * match.players.length;
+
+    final headline = isCountUp
+        ? 'LEG COMPLETE!'
+        : isTurnLimit
+            ? 'TIME\'S UP!'
+            : 'CHECKOUT!';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black87,
+      builder: (ctx) {
+        Future.delayed(const Duration(seconds: 10), () {
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        });
+
+        return Dialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 36, 32, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  headline,
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  winner.name,
+                  style: const TextStyle(
+                      fontSize: 34, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'won leg ${completedLeg.legNumber}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                // Score tally — leg wins per player + count-up scores
+                ...match.players.map((p) {
+                  final w = wins[p.id] ?? 0;
+                  final isWinner = p.id == winner.id;
+                  final accent = Theme.of(context).colorScheme.primary;
+
+                  // In count-up show each player's score for this leg.
+                  String? legScore;
+                  if (isCountUp) {
+                    final pTurns = completedLeg.turns
+                        .where((t) => t.playerId == p.id);
+                    final s = pTurns.isEmpty
+                        ? 0
+                        : pTurns.last.remainingAfter;
+                    legScore = '$s pts';
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          p.name,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: isWinner
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isWinner ? accent : Colors.white70,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (legScore != null)
+                              Text(
+                                legScore,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isWinner
+                                      ? accent
+                                      : Colors.white38,
+                                ),
+                              ),
+                            if (legScore != null)
+                              const SizedBox(width: 12),
+                            Text(
+                              '$w',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: isWinner ? accent : Colors.white38,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Continue →',
+                      style: TextStyle(fontSize: 16)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   void _showMatchWonDialog() {
+    final winnerName =
+        ref.read(gameProvider.notifier).lastWinnerName ?? 'Player';
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Match Over!'),
-        content: const Text('The match has been saved to history.'),
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '🏆',
+              style: const TextStyle(fontSize: 48),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              winnerName,
+              style: const TextStyle(
+                  fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'wins the match!',
+              style: TextStyle(color: Colors.white54, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Match saved to history.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ),
         actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.go('/');
-            },
-            child: const Text('New Game'),
-          ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -120,9 +291,41 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
             },
             child: const Text('View History'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/');
+            },
+            child: const Text('New Game'),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _changeStartingPlayer() async {
+    final match = ref.read(gameProvider)!;
+    if (match.currentLeg.turns.isNotEmpty) return;
+    final currentStartIdx = match.currentLeg.startPlayerIndex;
+
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Who throws first?'),
+        children: match.players.asMap().entries.map((e) {
+          return RadioListTile<int>(
+            title: Text(e.value.name),
+            value: e.key,
+            groupValue: currentStartIdx,
+            onChanged: (v) => Navigator.pop(ctx, v),
+          );
+        }).toList(),
+      ),
+    );
+
+    if (selected != null) {
+      await ref.read(gameProvider.notifier).setLegStartPlayer(selected);
+    }
   }
 
   Future<void> _confirmAbandon() async {
@@ -137,8 +340,8 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
               child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Abandon', style: TextStyle(color: Colors.redAccent)),
+            child: const Text('Abandon',
+                style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -165,13 +368,21 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
           icon: const Icon(Icons.close),
           onPressed: _confirmAbandon,
         ),
-        title: _MatchScoreHeader(match: match),
+        title: _MatchScoreHeader(
+          match: match,
+          currentRound: ref.read(gameProvider.notifier).currentRound,
+        ),
         actions: [
+          if (match.currentLeg.turns.isEmpty)
+            IconButton(
+              tooltip: 'Change who throws first',
+              icon: const Icon(Icons.swap_vert),
+              onPressed: _changeStartingPlayer,
+            ),
           IconButton(
             tooltip: 'Undo last turn',
             icon: const Icon(Icons.undo),
-            onPressed: () =>
-                ref.read(gameProvider.notifier).undoLastTurn(),
+            onPressed: () => ref.read(gameProvider.notifier).undoLastTurn(),
           ),
           IconButton(
             tooltip: 'Turn history',
@@ -221,15 +432,15 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
         ),
         _InputModeToggle(
           mode: _inputMode,
-          onChanged: (m) {
-            setState(() => _inputMode = m);
-            ref.read(dartInputProvider.notifier).clear();
-          },
+          onChanged: _setInputMode,
         ),
         if (_inputMode == TurnMode.total)
           ScoreInputTotal(onSubmit: _submitTotal)
         else
-          ScoreInputDartByDart(onConfirm: _submitDartByDart),
+          ScoreInputDartByDart(
+            onConfirm: _submitDartByDart,
+            playerRemaining: notifier.remainingForPlayer(currentId),
+          ),
         const SizedBox(height: 8),
       ],
     );
@@ -239,22 +450,34 @@ class _ScoringScreenState extends ConsumerState<ScoringScreen> {
 // ---------------------------------------------------------------------------
 
 class _MatchScoreHeader extends StatelessWidget {
-  const _MatchScoreHeader({required this.match});
+  const _MatchScoreHeader({required this.match, required this.currentRound});
   final DartsMatch match;
+  final int currentRound;
 
   @override
   Widget build(BuildContext context) {
     final wins = match.legWins;
-    final scoreText = match.players
-        .map((p) => '${p.name} ${wins[p.id] ?? 0}')
-        .join(' – ');
-    final legText = 'Leg ${match.currentLegIndex + 1}';
+    final scoreText =
+        match.players.map((p) => '${p.name} ${wins[p.id] ?? 0}').join(' – ');
+    final startIdx = match.currentLeg.startPlayerIndex;
+    final startName = match.players[startIdx].name;
+    final legStarted = match.currentLeg.turns.isNotEmpty;
+
+    final roundLabel = match.maxTurnsPerLeg > 0
+        ? 'Round $currentRound of ${match.maxTurnsPerLeg}'
+        : 'Round $currentRound';
+
+    final subtitle = legStarted
+        ? 'Leg ${match.currentLegIndex + 1} · $roundLabel'
+        : 'Leg ${match.currentLegIndex + 1} · $startName throws first';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(scoreText,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        Text(legText,
+            style:
+                const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        Text(subtitle,
             style: const TextStyle(fontSize: 11, color: Colors.white54)),
       ],
     );
@@ -272,21 +495,43 @@ class _ScoreBoard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(gameProvider.notifier);
+    final isCountUp = match.isCountUp;
     final currentPlayer =
         match.players.firstWhere((p) => p.id == currentPlayerId);
-    final currentRemaining = notifier.remainingForPlayer(currentPlayerId);
+    final currentScore = notifier.remainingForPlayer(currentPlayerId);
+    final others =
+        match.players.where((p) => p.id != currentPlayerId).toList();
 
-    final others = match.players.where((p) => p.id != currentPlayerId).toList();
+    final dartInput = ref.watch(dartInputProvider);
+    final dartSubtotal = dartInput.fold(0, (sum, d) => sum + d.points);
+    final hasDartsInProgress = dartSubtotal > 0;
+
+    // Count-up accumulates; standard subtracts.
+    final projected = isCountUp
+        ? currentScore + dartSubtotal
+        : currentScore - dartSubtotal;
+    final displayScore = hasDartsInProgress ? projected : currentScore;
+
+    final accent = Theme.of(context).colorScheme.primary;
+    final checkoutRoute =
+        isCountUp ? null : CheckoutTable.suggest(displayScore);
+    final canCheckout = !isCountUp &&
+        (match.doubleOut
+            ? displayScore <= 170 && displayScore > 1
+            : displayScore <= 180 && displayScore > 0);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         children: [
-          // Active player — big display
+          // ── Active player card ──────────────────────────────────────────
           Card(
-            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .primaryContainer
+                .withOpacity(0.3),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Column(
                 children: [
                   Text(
@@ -294,35 +539,70 @@ class _ScoreBoard extends ConsumerWidget {
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    '$currentRemaining',
-                    style: Theme.of(context).textTheme.displayLarge,
-                  ),
-                  if (match.doubleOut && currentRemaining <= 170 && currentRemaining > 1)
-                    Text(
-                      'Checkout!',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    child: Text(
+                      '$displayScore',
+                      key: ValueKey(displayScore),
+                      style: hasDartsInProgress
+                          ? TextStyle(
+                              fontSize: 80,
+                              fontWeight: FontWeight.bold,
+                              color: accent,
+                              height: 1.1,
+                            )
+                          : Theme.of(context).textTheme.displayLarge,
                     ),
+                  ),
+                  if (hasDartsInProgress)
+                    Text(
+                      isCountUp
+                          ? '+$dartSubtotal this turn  (was $currentScore)'
+                          : '−$dartSubtotal this turn  (was $currentScore)',
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 12),
+                    ),
+                  if (!isCountUp && !hasDartsInProgress)
+                    Text(
+                      'left',
+                      style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  if (isCountUp && !hasDartsInProgress)
+                    Text(
+                      'score',
+                      style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  if (canCheckout) ...[
+                    const SizedBox(height: 6),
+                    _CheckoutBadge(
+                      route: checkoutRoute,
+                      doubleOut: match.doubleOut,
+                      remaining: displayScore,
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 12),
-          // Other players
+          // ── Other players ───────────────────────────────────────────────
           ...others.map((p) {
-            final rem = notifier.remainingForPlayer(p.id);
+            final score = notifier.remainingForPlayer(p.id);
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Card(
                 child: ListTile(
-                  leading:
-                      const Icon(Icons.person_outline, color: Colors.white54),
+                  leading: const Icon(Icons.person_outline,
+                      color: Colors.white54),
                   title: Text(p.name),
                   trailing: Text(
-                    '$rem',
+                    '$score',
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold),
                   ),
@@ -330,6 +610,86 @@ class _ScoreBoard extends ConsumerWidget {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+class _CheckoutBadge extends StatelessWidget {
+  const _CheckoutBadge({
+    required this.route,
+    required this.doubleOut,
+    required this.remaining,
+  });
+
+  final String? route;
+  final bool doubleOut;
+  final int remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+
+    if (!doubleOut) {
+      // Straight-out: just flag it's reachable in ≤ 3 darts
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accent.withOpacity(0.4)),
+        ),
+        child: Text(
+          'Finish possible',
+          style: TextStyle(
+              color: accent, fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+      );
+    }
+
+    if (route == null) {
+      // Impossible checkout (e.g. 169)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.orange.withOpacity(0.4)),
+        ),
+        child: const Text(
+          'No standard checkout',
+          style: TextStyle(
+              color: Colors.orangeAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 12),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.track_changes, size: 14, color: accent),
+          const SizedBox(width: 6),
+          Text(
+            route!,
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              letterSpacing: 0.5,
+            ),
+          ),
         ],
       ),
     );
