@@ -8,12 +8,30 @@
 # ── Build output ──────────────────────────────────────────────────────────────
 /build/
 
-# ── Platforms NOT in use (Android / desktop) ──────────────────────────────────
-# Delete these lines if you ever add those platforms.
-/android/
+# ── Platforms NOT in use (desktop) ───────────────────────────────────────────
 /linux/
 /macos/
 /windows/
+
+# ── Android — secrets & generated files ──────────────────────────────────────
+#
+# COMMIT (needed for build):
+#   android/app/build.gradle
+#   android/app/src/main/AndroidManifest.xml
+#   android/app/src/main/kotlin/
+#   android/app/src/main/res/
+#   android/build.gradle
+#   android/settings.gradle
+#   android/gradle.properties
+#   android/gradle/wrapper/gradle-wrapper.properties
+#   android/gradle/wrapper/gradle-wrapper.jar
+#   android/gradlew + gradlew.bat
+#
+# IGNORE (secrets & machine-specific):
+android/key.properties
+android/local.properties
+*.jks
+*.keystore
 
 # ── iOS ───────────────────────────────────────────────────────────────────────
 #
